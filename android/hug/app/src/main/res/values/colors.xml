@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#F28A8E </color>
+    <color name="colorPrimaryDark">#FF1237 </color>
+    <color name="colorPrimaryDark2">#FF6A3B</color>
+    <color name="colorAccent">#F2BCAE</color>
+    <color name="colorSupport">#F2BCAE</color>
+    <color name="error_red">#ff525e</color>
+    <color name="white_trans">#aaffffff</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="black">#000000</color>
+    <!-- FF1237
+FF1237
+F28A8E
+F2BCAE -->
+</resources>
