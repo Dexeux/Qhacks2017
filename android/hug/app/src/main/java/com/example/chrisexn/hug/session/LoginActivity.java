@@ -193,6 +193,7 @@ public class LoginActivity extends AppCompatActivity {
 
                 //Toast.makeText(getApplicationContext(), "Test ", Toast.LENGTH_SHORT).show();
                 finish();
+                overridePendingTransition(0, 0);
             }else{
                 displayErrorMessage();
                 stopLoading();
@@ -260,6 +261,7 @@ public class LoginActivity extends AppCompatActivity {
         protected void onPostExecute(Boolean bool){
             if(bool){
                 finish();
+                overridePendingTransition(0, 0);
                 Intent intent = new Intent(LoginActivity.this,MainActivity.class);
                 startActivity(intent);
 

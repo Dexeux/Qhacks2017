@@ -46,8 +46,11 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
 
 import org.json.JSONObject;
 
@@ -56,6 +59,7 @@ import java.io.InputStreamReader;
 import java.lang.ref.WeakReference;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.List;
 
 /**
  * Created by chrisexn on 2/4/2017.
@@ -80,6 +84,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private Location mLocation;
     private LocationManager mLocationManager;
+    public boolean getHug = false;
     static final int TWO_MINUTES = 1000 * 60 * 2;
     /**
      * ATTENTION: This was auto-generated to implement the App Indexing API.
@@ -97,7 +102,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
          */
         mTitles = getResources().getStringArray(R.array.drawer_titles);
         mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
-        mDrawerList = (ListView) findViewById(R.id.left_drawer);
+        mDrawerList = (ListView) findViewById(R.id.drawer_list);
         mToolbar = (Toolbar) findViewById(R.id.my_toolbar);
 
         // Set the adapter for the list view
@@ -146,12 +151,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             @Override
             public void onClick(View v) {
                 toggleLoading(true);
+                getHug = true;
                 new Hug().execute(Constants.getToken(MainActivity.this));
             }
         });
         mClock.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                getHug=false;
                 toggleLoading(true);
                 new HugLater().execute(Constants.getToken(MainActivity.this));
             }
@@ -276,6 +283,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             if (mTitles[position].equals("Logout")) {
                 toggleLoading(true);
                 new Logout().execute(Constants.getToken(MainActivity.this));
+            } else if (mTitles[position].equals("Hugs")) {
+                Intent myIntent = new Intent(MainActivity.this, ScoreInfoDisplay.class);
+                startActivity(myIntent);
             }
         }
     }
@@ -287,6 +297,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         Location loc = getLastBestLocation();
         if (loc != null && mHandler != null) {
             toggleLoading(true);
+            getHug = false;
             Thread thread = new Thread(new SearchingHug(Constants.getToken(this), loc.getLatitude(), loc.getLongitude(), mHandler));
             thread.start();
         } else {
@@ -347,9 +358,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     if (bundle.getString("status").equals("success")) {
                         if(activity.mLove.getVisibility()==View.VISIBLE){
                             activity.makeToast("Match Failed");
+                            activity.removeMarker();
                             activity.toggleButtons(false);
                         }else{
-                            activity.makeToast("Huggie!");
+                            if(activity.getHug) {
+                                activity.makeToast("Huggie!");
+                            }
                             activity.toggleButtons(false);
                         }
                     }
@@ -400,6 +414,26 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void setMarker(Double lat, Double lng) {
         mMap.clear();
         Marker marker = mMap.addMarker(new MarkerOptions().position(new LatLng(lat, lng)).draggable(true).title("Huggie!"));
+        //Zoom to current position + marker
+        Location loc = getLastBestLocation();
+        if(loc!=null) {
+            Polyline line = mMap.addPolyline(new PolylineOptions()
+                    .add(new LatLng(lat, lng), new LatLng(loc.getLatitude(), loc.getLongitude())));
+            line.setVisible(false);
+            List<LatLng> points = line.getPoints(); // route is instance of PolylineOptions
+
+            LatLngBounds.Builder bc = new LatLngBounds.Builder();
+
+            for (LatLng item : points) {
+                bc.include(item);
+            }
+
+            mMap.moveCamera(CameraUpdateFactory.newLatLngBounds(bc.build(), 100));
+        }
+    }
+
+    public void removeMarker(){
+        mMap.clear();
     }
 
     /**
@@ -593,7 +627,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         protected Boolean doInBackground(String... str) {
             String token = str[0];
             String status = "";
-            String urlEndPoint = Constants.WEB_URL + "/api/v1/hugs/hugging";
+            String urlEndPoint = Constants.WEB_URL + "/api/v1/hugs/hug_later";
 
             //Run the api call
             HttpURLConnection client = null;
@@ -635,6 +669,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         protected void onPostExecute(Boolean bool) {
             if (bool) {
                 makeToast("Maybe Huggie Later");
+                removeMarker();
                 toggleButtons(false);
 
             } else {
@@ -693,9 +728,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         @Override
         protected void onPostExecute(Integer i) {
-            if (i == 1) {
+            if (i == 2) {
                 makeToast("Waiting For Huggie");
-            } else if(i == 2) {
+            } else if(i == 1) {
                 makeToast("Huggie!");
             }else {
                     Toast.makeText(getApplicationContext(), "Action Unsuccessful", Toast.LENGTH_SHORT).show();

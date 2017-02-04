@@ -20,14 +20,13 @@
             android:name=".session.LoginActivity"
             android:screenOrientation="portrait"
             android:theme="@style/AppThemeNoToolbar">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
         </activity>
+        <activity android:name=".ScoreInfoDisplay"/>
         <activity
             android:name=".session.RegisterActivity"
             android:screenOrientation="portrait"

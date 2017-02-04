@@ -59,13 +59,28 @@
             </RelativeLayout>
         </FrameLayout>
         <!-- The navigation drawer -->
-        <ListView android:id="@+id/left_drawer"
+        <LinearLayout android:id="@+id/left_drawer"
             android:layout_width="240dp"
             android:layout_height="match_parent"
             android:layout_gravity="start"
-            android:choiceMode="singleChoice"
-            android:divider="@color/colorAccent"
-            android:dividerHeight="1dp"
-            android:background="@color/white"/>
+            android:orientation="vertical"
+            android:background="@color/white">
+            <ImageView
+                android:layout_width="100dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_height="100dp"
+                android:src="@mipmap/ic_logo"/>
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/colorAccent"/>
+            <ListView
+                android:id="@+id/drawer_list"
+                android:choiceMode="singleChoice"
+                android:divider="@color/colorAccent"
+                android:dividerHeight="1dp"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"/>
+            </LinearLayout>
     </android.support.v4.widget.DrawerLayout>
 </LinearLayout>
