@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">LITT</string>
+    <string name="app_name">Huggie</string>
 
     <string name="title_activity_login">Sign in</string>
 
@@ -62,6 +62,11 @@
     <string name="action_settings">Settings</string>
 
     <!-- Main Activity -->
-    <string name="google_android_map_api_key">AIzaSyDUSs-VdV5IEG1YdQFfPU0lGQH7_XD1DQc</string>
-
+    <string name="drawer_open">Open Drawer</string>
+    <string name="drawer_close">Close Drawer</string>
+    <string name="drawer_name">Options</string>
+    <array name="drawer_titles">
+        <item>Hugs</item>
+        <item>Logout</item>
+    </array>
 </resources>

@@ -152,7 +152,8 @@ public class RegisterActivity extends AppCompatActivity {
                 os.write(credentials.toString().getBytes("UTF-8"));
                 os.flush();
                 os.close();
-                if(client.getResponseCode()!= 200){
+                int responsecode = client.getResponseCode();
+                if(responsecode != 200){
                     return "";
                 }
 

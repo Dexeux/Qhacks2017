@@ -9,7 +9,7 @@ import android.preference.PreferenceManager;
  */
 
 public class Constants {
-    public static final String WEB_URL = "http://findyourjam-dev.us-west-2.elasticbeanstalk.com";
+    public static final String WEB_URL = "http://qhackserver-dev.us-west-2.elasticbeanstalk.com";
 
 
     public static void updateAccount(Context activity, String token){
