@@ -70,7 +70,8 @@ public class SearchingHug implements Runnable {
             os.write(credentials.toString().getBytes("UTF-8"));
             os.flush();
             os.close();
-            if(client.getResponseCode()!= 200){
+            int responseCode = client.getResponseCode();
+            if(responseCode!= 200){
                 mHandler.sendMessage(msg);
                 return;
             }
@@ -79,17 +80,17 @@ public class SearchingHug implements Runnable {
             JSONObject response= new JSONObject(text);
             String status = response.getString("status");
             if(status.equals("wait")){
-                bundle.putString("status","success");
+                /*bundle.putString("status","success");
                 bundle.putDouble("latitude",mLat);
                 bundle.putDouble("longitude",mLong);
                 msg.setData(bundle);
-                mHandler.sendMessage(msg);
-                //new Timer().schedule(new TimerTask() {
-                //    @Override
-                //    public void run() {
-                //        SearchingHug.this.run();
-                //    }
-                //}, 3000);
+                mHandler.sendMessage(msg);*/
+                new Timer().schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        SearchingHug.this.run();
+                    }
+                }, 3000);
                 return;
             }else if (status.equals("success")){
                 bundle.putString("status","success");

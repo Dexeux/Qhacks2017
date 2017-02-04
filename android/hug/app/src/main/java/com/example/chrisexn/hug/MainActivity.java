@@ -73,6 +73,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private ProgressBar mProgress;
     private DrawerAdapter mAdapter;
     private Handler mHandler;
+    private Handler mStatusHandler;
 
     private ImageView mLove;
     private ImageView mClock;
@@ -141,6 +142,20 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mProgress = (ProgressBar) findViewById(R.id.spinner);
         mLove = (ImageView) findViewById(R.id.love);
         mClock = (ImageView) findViewById(R.id.clock);
+        mLove.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toggleLoading(true);
+                new Hug().execute(Constants.getToken(MainActivity.this));
+            }
+        });
+        mClock.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toggleLoading(true);
+                new HugLater().execute(Constants.getToken(MainActivity.this));
+            }
+        });
 
         int progressWidth = mProgress.getLayoutParams().width;
         int progressHeight = mProgress.getLayoutParams().height;
@@ -180,7 +195,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         }
 
-        mHandler = new HandlerExtension(this);
+        mStatusHandler = new HandlerStatus(this);
+        mHandler = new HandlerExtension(this,mStatusHandler);
         mLocationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
         // ATTENTION: This was auto-generated to implement the App Indexing API.
@@ -253,42 +269,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     }
 
-    /**
-     * ATTENTION: This was auto-generated to implement the App Indexing API.
-     * See https://g.co/AppIndexing/AndroidStudio for more information.
-     */
-    public Action getIndexApiAction() {
-        Thing object = new Thing.Builder()
-                .setName("Main Page") // TODO: Define a title for the content shown.
-                // TODO: Make sure this auto-generated URL is correct.
-                .setUrl(Uri.parse("http://[ENTER-YOUR-URL-HERE]"))
-                .build();
-        return new Action.Builder(Action.TYPE_VIEW)
-                .setObject(object)
-                .setActionStatus(Action.STATUS_TYPE_COMPLETED)
-                .build();
-    }
-
-    @Override
-    public void onStart() {
-        super.onStart();
-
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        client.connect();
-        AppIndex.AppIndexApi.start(client, getIndexApiAction());
-    }
-
-    @Override
-    public void onStop() {
-        super.onStop();
-
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        AppIndex.AppIndexApi.end(client, getIndexApiAction());
-        client.disconnect();
-    }
-
     //Handle drawer click
     private class DrawerItemClickListener implements ListView.OnItemClickListener {
         @Override
@@ -318,9 +298,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static class HandlerExtension extends Handler {
 
         private final WeakReference<MainActivity> currentActivity;
-
-        public HandlerExtension(MainActivity activity) {
+        private final WeakReference<Handler> statusHandler;
+        public HandlerExtension(MainActivity activity, Handler handler) {
             currentActivity = new WeakReference<MainActivity>(activity);
+            statusHandler = new WeakReference<Handler>(handler);
         }
 
         @Override
@@ -338,8 +319,39 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                         activity.makeToast("Found Match");
                         activity.setMarker(bundle.getDouble("latitude"), bundle.getDouble("longitude"));
                         activity.toggleButtons(true);
-                        //activity.toggleLoading(false);
+                        Thread th = new Thread (new GettingStatus(Constants.getToken(activity.getApplication()),statusHandler.get()));
+                        th.start();
+                    }
+                }
+            }
+        }
+    }
 
+    private static class HandlerStatus extends Handler {
+
+        private final WeakReference<MainActivity> currentActivity;
+
+        public HandlerStatus(MainActivity activity) {
+            currentActivity = new WeakReference<MainActivity>(activity);
+        }
+
+        @Override
+        public void handleMessage(Message message) {
+            MainActivity activity = currentActivity.get();
+            if (activity != null) {
+                Bundle bundle = message.getData();
+                if (bundle != null) {
+                    if (bundle.getString("status").equals("failed")) {
+                        activity.makeToast("Connection Error");
+                    }
+                    if (bundle.getString("status").equals("success")) {
+                        if(activity.mLove.getVisibility()==View.VISIBLE){
+                            activity.makeToast("Match Failed");
+                            activity.toggleButtons(false);
+                        }else{
+                            activity.makeToast("Huggie!");
+                            activity.toggleButtons(false);
+                        }
                     }
                 }
                 //activity.updateResults(message.getData().getString("result"));
@@ -348,7 +360,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     public void toggleLoading(boolean toggle) {
-        if (mMainButton == null || mProgress == null) {
+        if (mMainButton == null || mProgress == null || mLove == null || mClock == null) {
             return;
         }
         if (toggle) {
@@ -358,6 +370,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             mMainButton.setVisibility(View.VISIBLE);
             mProgress.setVisibility(View.GONE);
         }
+        mLove.setVisibility(View.GONE);
+        mClock.setVisibility(View.GONE);
     }
 
     public void toggleButtons(boolean toggle) {
@@ -389,7 +403,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     /**
-     * Location stff
+     * Location stuff
      */
 
     private class MyLocationListener implements LocationListener {
@@ -574,4 +588,120 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
+    private class HugLater extends AsyncTask<String, Void, Boolean> {
+        @Override
+        protected Boolean doInBackground(String... str) {
+            String token = str[0];
+            String status = "";
+            String urlEndPoint = Constants.WEB_URL + "/api/v1/hugs/hugging";
+
+            //Run the api call
+            HttpURLConnection client = null;
+            try {
+                URL url = new URL(urlEndPoint);
+                client = (HttpURLConnection) url.openConnection();
+                client.setRequestMethod("GET");
+                client.setConnectTimeout(10000);
+                client.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                client.setRequestProperty("Authorization", " Token " + token);
+                client.connect();
+                int t = client.getResponseCode();
+                if (t != 200) {
+                    return false;
+                }
+                BufferedReader br = new BufferedReader(new InputStreamReader(client.getInputStream()));
+                String text = br.readLine();
+                JSONObject response = new JSONObject(text);
+
+                status = response.getString("status");
+            } catch (Exception e) {
+                e.printStackTrace();
+                if (client != null) {
+                    client.disconnect();
+                }
+                return false;
+            } finally {
+                if (client != null) {
+                    client.disconnect();
+                }
+            }
+            if (!status.equals("success")) {
+                return false;
+            }
+            return true;
+        }
+
+        @Override
+        protected void onPostExecute(Boolean bool) {
+            if (bool) {
+                makeToast("Maybe Huggie Later");
+                toggleButtons(false);
+
+            } else {
+                makeToast("Action Unsuccessful");
+                toggleButtons(true);
+            }
+        }
+    }
+    private class Hug extends AsyncTask<String, Void, Integer> {
+        @Override
+        protected Integer doInBackground(String... str) {
+            String token = str[0];
+            String status = "";
+            String urlEndPoint = Constants.WEB_URL + "/api/v1/hugs/hugging";
+
+            //Run the api call
+            HttpURLConnection client = null;
+            try {
+                URL url = new URL(urlEndPoint);
+                client = (HttpURLConnection) url.openConnection();
+                client.setRequestMethod("GET");
+                client.setConnectTimeout(10000);
+                client.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                client.setRequestProperty("Authorization", " Token " + token);
+                client.connect();
+                int t = client.getResponseCode();
+                if (t != 200) {
+                    return 0;
+                }
+                BufferedReader br = new BufferedReader(new InputStreamReader(client.getInputStream()));
+                String text = br.readLine();
+                JSONObject response = new JSONObject(text);
+
+                status = response.getString("status");
+            } catch (Exception e) {
+                e.printStackTrace();
+                if (client != null) {
+                    client.disconnect();
+                }
+                return 0;
+            } finally {
+                if (client != null) {
+                    client.disconnect();
+                }
+            }
+
+            if (status.equals("success")) {
+                return 1;
+            } else if (status.equals("wait")) {
+                return 2;
+            }else {
+                return 0;
+            }
+
+        }
+
+        @Override
+        protected void onPostExecute(Integer i) {
+            if (i == 1) {
+                makeToast("Waiting For Huggie");
+            } else if(i == 2) {
+                makeToast("Huggie!");
+            }else {
+                    Toast.makeText(getApplicationContext(), "Action Unsuccessful", Toast.LENGTH_SHORT).show();
+                    toggleLoading(false);
+            }
+        }
+
+    }
 }
