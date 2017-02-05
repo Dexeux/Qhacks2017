@@ -76,6 +76,11 @@ public class GettingStatus implements Runnable {
                     }
                 }, 3000);
                 return;
+            } else if (status.equals("ditched")){
+                bundle.putString("status","rematch");
+                msg.setData(bundle);
+                mHandler.sendMessage(msg);
+                return;
             }
         } catch (Exception e) {
             e.printStackTrace();

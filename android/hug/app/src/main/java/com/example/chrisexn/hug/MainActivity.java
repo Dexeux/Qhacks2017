@@ -298,6 +298,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (loc != null && mHandler != null) {
             toggleLoading(true);
             getHug = false;
+            makeToast("Searching For Huggies!");
             Thread thread = new Thread(new SearchingHug(Constants.getToken(this), loc.getLatitude(), loc.getLongitude(), mHandler));
             thread.start();
         } else {
@@ -354,18 +355,22 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 if (bundle != null) {
                     if (bundle.getString("status").equals("failed")) {
                         activity.makeToast("Connection Error");
-                    }
-                    if (bundle.getString("status").equals("success")) {
+                    }else if (bundle.getString("status").equals("success")) {
                         if(activity.mLove.getVisibility()==View.VISIBLE){
-                            activity.makeToast("Match Failed");
-                            activity.removeMarker();
+                            activity.makeToast("Try Huggie Again!");
+                            activity.removeMarkerCenter();
                             activity.toggleButtons(false);
                         }else{
                             if(activity.getHug) {
                                 activity.makeToast("Huggie!");
+                                activity.removeMarkerCenter();
                             }
                             activity.toggleButtons(false);
                         }
+                    }else if (bundle.getString("status").equals("rematch")){
+                        activity.makeToast("Try Huggie Again!");
+                        activity.removeMarkerCenter();
+                        activity.toggleButtons(false);
                     }
                 }
                 //activity.updateResults(message.getData().getString("result"));
@@ -428,7 +433,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 bc.include(item);
             }
 
-            mMap.moveCamera(CameraUpdateFactory.newLatLngBounds(bc.build(), 100));
+            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bc.build(), 500));
         }
     }
 
@@ -436,6 +441,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mMap.clear();
     }
 
+    public void removeMarkerCenter(){
+        removeMarker();
+        zoomCurrentLocation();
+    }
     /**
      * Location stuff
      */
@@ -732,6 +741,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 makeToast("Waiting For Huggie");
             } else if(i == 1) {
                 makeToast("Huggie!");
+                removeMarkerCenter();
             }else {
                     Toast.makeText(getApplicationContext(), "Action Unsuccessful", Toast.LENGTH_SHORT).show();
                     toggleLoading(false);
