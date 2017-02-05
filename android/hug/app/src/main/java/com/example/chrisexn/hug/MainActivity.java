@@ -8,14 +8,19 @@ import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.view.Gravity;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
@@ -29,6 +34,10 @@ import android.widget.RelativeLayout;
 import android.widget.Toast;
 
 import com.example.chrisexn.hug.session.LoginActivity;
+import com.google.android.gms.appindexing.Action;
+import com.google.android.gms.appindexing.AppIndex;
+import com.google.android.gms.appindexing.Thing;
+import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.LocationSource;
@@ -37,20 +46,26 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
 
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.lang.ref.WeakReference;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.List;
 
 /**
  * Created by chrisexn on 2/4/2017.
  */
 
-public class MainActivity extends AppCompatActivity implements OnMapReadyCallback,GoogleMap.OnMyLocationButtonClickListener {
+public class MainActivity extends AppCompatActivity implements OnMapReadyCallback, GoogleMap.OnMyLocationButtonClickListener {
 
     private String[] mTitles;
     private DrawerLayout mDrawerLayout;
@@ -61,6 +76,21 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private ImageView mMainButton;
     private ProgressBar mProgress;
     private DrawerAdapter mAdapter;
+    private Handler mHandler;
+    private Handler mStatusHandler;
+
+    private ImageView mLove;
+    private ImageView mClock;
+
+    private Location mLocation;
+    private LocationManager mLocationManager;
+    public boolean getHug = false;
+    static final int TWO_MINUTES = 1000 * 60 * 2;
+    /**
+     * ATTENTION: This was auto-generated to implement the App Indexing API.
+     * See https://g.co/AppIndexing/AndroidStudio for more information.
+     */
+    private GoogleApiClient client;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -72,7 +102,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
          */
         mTitles = getResources().getStringArray(R.array.drawer_titles);
         mDrawerLayout = (DrawerLayout) findViewById(R.id.drawer_layout);
-        mDrawerList = (ListView) findViewById(R.id.left_drawer);
+        mDrawerList = (ListView) findViewById(R.id.drawer_list);
         mToolbar = (Toolbar) findViewById(R.id.my_toolbar);
 
         // Set the adapter for the list view
@@ -86,11 +116,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 R.string.drawer_open,  /* "open drawer" description */
                 R.string.drawer_close  /* "close drawer" description */
         ) {
-            /** Called when a drawer has settled in a completely closed state. */
+            /**
+             * Called when a drawer has settled in a completely closed state.
+             */
             public void onDrawerClosed(View view) {
                 super.onDrawerClosed(view);
             }
-            /** Called when a drawer has settled in a completely open state. */
+
+            /**
+             * Called when a drawer has settled in a completely open state.
+             */
             public void onDrawerOpened(View drawerView) {
                 super.onDrawerOpened(drawerView);
             }
@@ -99,7 +134,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         // Set the drawer toggle as the DrawerListener
         mDrawerLayout.addDrawerListener(mDrawerToggle);
         setSupportActionBar(mToolbar);
-        if(getSupportActionBar() !=null) {
+        if (getSupportActionBar() != null) {
             getSupportActionBar().setTitle(R.string.app_name);
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             getSupportActionBar().setHomeButtonEnabled(true);
@@ -109,11 +144,29 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
          * INIT SPINNER
          */
 
-        mProgress = (ProgressBar)findViewById(R.id.spinner);
+        mProgress = (ProgressBar) findViewById(R.id.spinner);
+        mLove = (ImageView) findViewById(R.id.love);
+        mClock = (ImageView) findViewById(R.id.clock);
+        mLove.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toggleLoading(true);
+                getHug = true;
+                new Hug().execute(Constants.getToken(MainActivity.this));
+            }
+        });
+        mClock.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                getHug=false;
+                toggleLoading(true);
+                new HugLater().execute(Constants.getToken(MainActivity.this));
+            }
+        });
 
         int progressWidth = mProgress.getLayoutParams().width;
         int progressHeight = mProgress.getLayoutParams().height;
-        RelativeLayout.LayoutParams progressParams = new RelativeLayout.LayoutParams(progressWidth,progressHeight);
+        RelativeLayout.LayoutParams progressParams = new RelativeLayout.LayoutParams(progressWidth, progressHeight);
         progressParams.setMargins(0, 0, 0, 100);
         progressParams.addRule(RelativeLayout.CENTER_HORIZONTAL, RelativeLayout.TRUE);
         progressParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM, RelativeLayout.TRUE);
@@ -132,13 +185,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (mapView != null &&
                 mapView.findViewById(Integer.parseInt("1")) != null) {
             // Get the button view
-            mMainButton = (ImageView)((View) mapView.findViewById(Integer.parseInt("1")).getParent()).findViewById(Integer.parseInt("2"));
+            mMainButton = (ImageView) ((View) mapView.findViewById(Integer.parseInt("1")).getParent()).findViewById(Integer.parseInt("2"));
             // and next place it, on bottom right (as Google Maps app)
             int positionWidth = mMainButton.getLayoutParams().width;
             int positionHeight = mMainButton.getLayoutParams().height;
 
             //lay out position button
-            RelativeLayout.LayoutParams positionParams = new RelativeLayout.LayoutParams(positionWidth,positionHeight);
+            RelativeLayout.LayoutParams positionParams = new RelativeLayout.LayoutParams(positionWidth, positionHeight);
             positionParams.setMargins(0, 0, 0, 100);
             positionParams.addRule(RelativeLayout.CENTER_HORIZONTAL, RelativeLayout.TRUE);
             positionParams.addRule(RelativeLayout.ALIGN_PARENT_BOTTOM, RelativeLayout.TRUE);
@@ -149,18 +202,28 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         }
 
+        mStatusHandler = new HandlerStatus(this);
+        mHandler = new HandlerExtension(this,mStatusHandler);
+        mLocationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+
+        // ATTENTION: This was auto-generated to implement the App Indexing API.
+        // See https://g.co/AppIndexing/AndroidStudio for more information.
+        client = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
     }
+
     @Override
     protected void onPostCreate(Bundle savedInstanceState) {
         super.onPostCreate(savedInstanceState);
         // Sync the toggle state after onRestoreInstanceState has occurred.
         mDrawerToggle.syncState();
     }
+
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         mDrawerToggle.onConfigurationChanged(newConfig);
     }
+
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         // Pass the event to ActionBarDrawerToggle, if it returns
@@ -176,16 +239,17 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mMap = googleMap;
         zoomCurrentLocation();
     }
-    public void zoomCurrentLocation(){
+
+    public void zoomCurrentLocation() {
 
         //Request for permission
         if ((ContextCompat.checkSelfPermission(MainActivity.this,
                 Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) && (ContextCompat.checkSelfPermission(MainActivity.this,
-                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)){
+                Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED)) {
             ActivityCompat.requestPermissions(MainActivity.this,
-                    new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,Manifest.permission.ACCESS_FINE_LOCATION},
+                    new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION},
                     0);
-        }else {
+        } else {
 
             mMap.setMyLocationEnabled(true);
 
@@ -205,6 +269,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
             }
             mMap.setOnMyLocationButtonClickListener(this);
+            LocationListener locationListener = new MyLocationListener();
+            locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER, 5000, 10, locationListener);
         }
 
     }
@@ -213,28 +280,295 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private class DrawerItemClickListener implements ListView.OnItemClickListener {
         @Override
         public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-            if(mTitles[position].equals("Logout")){
+            if (mTitles[position].equals("Logout")) {
                 toggleLoading(true);
                 new Logout().execute(Constants.getToken(MainActivity.this));
+            } else if (mTitles[position].equals("Hugs")) {
+                Intent myIntent = new Intent(MainActivity.this, ScoreInfoDisplay.class);
+                startActivity(myIntent);
             }
         }
     }
+
     //Handle button click
     @Override
     public boolean onMyLocationButtonClick() {
+        //Start Search for thread
+        Location loc = getLastBestLocation();
+        if (loc != null && mHandler != null) {
+            toggleLoading(true);
+            getHug = false;
+            makeToast("Searching For Huggies!");
+            Thread thread = new Thread(new SearchingHug(Constants.getToken(this), loc.getLatitude(), loc.getLongitude(), mHandler));
+            thread.start();
+        } else {
+            makeToast("Location Not Found");
+        }
         return false;
     }
 
-    public void toggleLoading(boolean toggle){
-        if(mMainButton == null || mProgress==null){
+    private static class HandlerExtension extends Handler {
+
+        private final WeakReference<MainActivity> currentActivity;
+        private final WeakReference<Handler> statusHandler;
+        public HandlerExtension(MainActivity activity, Handler handler) {
+            currentActivity = new WeakReference<MainActivity>(activity);
+            statusHandler = new WeakReference<Handler>(handler);
+        }
+
+        @Override
+        public void handleMessage(Message message) {
+            MainActivity activity = currentActivity.get();
+            if (activity != null) {
+                // Do Something to activity
+                Bundle bundle = message.getData();
+                if (bundle != null) {
+                    if (bundle.getString("status").equals("failed")) {
+                        activity.makeToast("Error Searching");
+                        activity.toggleLoading(false);
+                    }
+                    if (bundle.getString("status").equals("success")) {
+                        activity.makeToast("Found Match");
+                        activity.setMarker(bundle.getDouble("latitude"), bundle.getDouble("longitude"));
+                        activity.toggleButtons(true);
+                        Thread th = new Thread (new GettingStatus(Constants.getToken(activity.getApplication()),statusHandler.get()));
+                        th.start();
+                    }
+                }
+            }
+        }
+    }
+
+    private static class HandlerStatus extends Handler {
+
+        private final WeakReference<MainActivity> currentActivity;
+
+        public HandlerStatus(MainActivity activity) {
+            currentActivity = new WeakReference<MainActivity>(activity);
+        }
+
+        @Override
+        public void handleMessage(Message message) {
+            MainActivity activity = currentActivity.get();
+            if (activity != null) {
+                Bundle bundle = message.getData();
+                if (bundle != null) {
+                    if (bundle.getString("status").equals("failed")) {
+                        activity.makeToast("Connection Error");
+                    }else if (bundle.getString("status").equals("success")) {
+                        if(activity.mLove.getVisibility()==View.VISIBLE){
+                            activity.makeToast("Try Huggie Again!");
+                            activity.removeMarkerCenter();
+                            activity.toggleButtons(false);
+                        }else{
+                            if(activity.getHug) {
+                                activity.makeToast("Huggie!");
+                                activity.removeMarkerCenter();
+                            }
+                            activity.toggleButtons(false);
+                        }
+                    }else if (bundle.getString("status").equals("rematch")){
+                        activity.makeToast("Try Huggie Again!");
+                        activity.removeMarkerCenter();
+                        activity.toggleButtons(false);
+                    }
+                }
+                //activity.updateResults(message.getData().getString("result"));
+            }
+        }
+    }
+
+    public void toggleLoading(boolean toggle) {
+        if (mMainButton == null || mProgress == null || mLove == null || mClock == null) {
             return;
         }
-        if(toggle){
+        if (toggle) {
             mMainButton.setVisibility(View.GONE);
             mProgress.setVisibility(View.VISIBLE);
-        }else{
+        } else {
             mMainButton.setVisibility(View.VISIBLE);
             mProgress.setVisibility(View.GONE);
+        }
+        mLove.setVisibility(View.GONE);
+        mClock.setVisibility(View.GONE);
+    }
+
+    public void toggleButtons(boolean toggle) {
+        if (mMainButton == null || mProgress == null || mLove == null || mClock == null) {
+            return;
+        }
+        if (toggle) {
+            mLove.setVisibility(View.VISIBLE);
+            mClock.setVisibility(View.VISIBLE);
+            mMainButton.setVisibility(View.GONE);
+            mProgress.setVisibility(View.GONE);
+        } else {
+            mLove.setVisibility(View.GONE);
+            mClock.setVisibility(View.GONE);
+            mMainButton.setVisibility(View.VISIBLE);
+            mProgress.setVisibility(View.GONE);
+        }
+    }
+
+    public void makeToast(String str) {
+        Toast toast = Toast.makeText(this, str, Toast.LENGTH_SHORT);
+        toast.setGravity(Gravity.CENTER, 0, 500);
+        toast.show();
+    }
+
+    public void setMarker(Double lat, Double lng) {
+        mMap.clear();
+        Marker marker = mMap.addMarker(new MarkerOptions().position(new LatLng(lat, lng)).draggable(true).title("Huggie!"));
+        //Zoom to current position + marker
+        Location loc = getLastBestLocation();
+        if(loc!=null) {
+            Polyline line = mMap.addPolyline(new PolylineOptions()
+                    .add(new LatLng(lat, lng), new LatLng(loc.getLatitude(), loc.getLongitude())));
+            line.setVisible(false);
+            List<LatLng> points = line.getPoints(); // route is instance of PolylineOptions
+
+            LatLngBounds.Builder bc = new LatLngBounds.Builder();
+
+            for (LatLng item : points) {
+                bc.include(item);
+            }
+
+            mMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bc.build(), 500));
+        }
+    }
+
+    public void removeMarker(){
+        mMap.clear();
+    }
+
+    public void removeMarkerCenter(){
+        removeMarker();
+        zoomCurrentLocation();
+    }
+    /**
+     * Location stuff
+     */
+
+    private class MyLocationListener implements LocationListener {
+
+        @Override
+        public void onLocationChanged(Location location) {
+
+            makeUseOfNewLocation(location);
+
+            if (mLocation == null) {
+                mLocation = location;
+            }
+
+        }
+
+
+        /**
+         * This method modify the last know good location according to the arguments.
+         *
+         * @param location The possible new location.
+         */
+        void makeUseOfNewLocation(Location location) {
+            if (isBetterLocation(location, mLocation)) {
+                mLocation = location;
+            }
+        }
+
+        /**
+         * Determines whether one location reading is better than the current location fix
+         *
+         * @param location            The new location that you want to evaluate
+         * @param currentBestLocation The current location fix, to which you want to compare the new one.
+         */
+        protected boolean isBetterLocation(Location location, Location currentBestLocation) {
+            if (currentBestLocation == null) {
+                // A new location is always better than no location
+                return true;
+            }
+
+            // Check whether the new location fix is newer or older
+            long timeDelta = location.getTime() - currentBestLocation.getTime();
+            boolean isSignificantlyNewer = timeDelta > TWO_MINUTES;
+            boolean isSignificantlyOlder = timeDelta < -TWO_MINUTES;
+            boolean isNewer = timeDelta > 0;
+
+            // If it's been more than two minutes since the current location, use the new location,
+            // because the user has likely moved.
+            if (isSignificantlyNewer) {
+                return true;
+                // If the new location is more than two minutes older, it must be worse.
+            } else if (isSignificantlyOlder) {
+                return false;
+            }
+
+            // Check whether the new location fix is more or less accurate
+            int accuracyDelta = (int) (location.getAccuracy() - currentBestLocation.getAccuracy());
+            boolean isLessAccurate = accuracyDelta > 0;
+            boolean isMoreAccurate = accuracyDelta < 0;
+            boolean isSignificantlyLessAccurate = accuracyDelta > 200;
+
+            // Check if the old and new location are from the same provider
+            boolean isFromSameProvider = isSameProvider(location.getProvider(),
+                    currentBestLocation.getProvider());
+
+            // Determine location quality using a combination of timeliness and accuracy
+            if (isMoreAccurate) {
+                return true;
+            } else if (isNewer && !isLessAccurate) {
+                return true;
+            } else if (isNewer && !isSignificantlyLessAccurate && isFromSameProvider) {
+                return true;
+            }
+            return false;
+        }
+
+        /**
+         * Checks whether two providers are the same
+         */
+        private boolean isSameProvider(String provider1, String provider2) {
+            if (provider1 == null) {
+                return provider2 == null;
+            }
+            return provider1.equals(provider2);
+        }
+
+
+        @Override
+        public void onProviderDisabled(String provider) {
+        }
+
+        @Override
+        public void onProviderEnabled(String provider) {
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+        }
+    }
+
+    private Location getLastBestLocation() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION}, 0);
+            return null;
+        }
+        Location locationGPS = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        Location locationNet = mLocationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+
+        long GPSLocationTime = 0;
+        if (null != locationGPS) {
+            GPSLocationTime = locationGPS.getTime();
+        }
+
+        long NetLocationTime = 0;
+
+        if (null != locationNet) {
+            NetLocationTime = locationNet.getTime();
+        }
+
+        if (0 < GPSLocationTime - NetLocationTime) {
+            return locationGPS;
+        } else {
+            return locationNet;
         }
     }
 
@@ -243,59 +577,176 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
      */
     private class Logout extends AsyncTask<String, Void, Boolean> {
         @Override
-        protected Boolean doInBackground(String ... str){
+        protected Boolean doInBackground(String... str) {
             String token = str[0];
             String status = "";
-            String urlEndPoint = Constants.WEB_URL + "/api/v1/auth/logout" ;
+            String urlEndPoint = Constants.WEB_URL + "/api/v1/auth/logout";
 
             //Run the api call
             HttpURLConnection client = null;
             try {
                 URL url = new URL(urlEndPoint);
-                client =(HttpURLConnection) url.openConnection();
+                client = (HttpURLConnection) url.openConnection();
                 client.setRequestMethod("GET");
                 client.setConnectTimeout(10000);
                 client.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
                 client.setRequestProperty("Authorization", " Token " + token);
                 client.connect();
-                int t  =client.getResponseCode();
-                if(t!= 200){
+                int t = client.getResponseCode();
+                if (t != 200) {
                     return false;
                 }
                 BufferedReader br = new BufferedReader(new InputStreamReader(client.getInputStream()));
                 String text = br.readLine();
-                JSONObject response= new JSONObject(text);
+                JSONObject response = new JSONObject(text);
 
                 status = response.getString("status");
-            }catch (Exception e){
+            } catch (Exception e) {
                 e.printStackTrace();
-                if(client!=null){
+                if (client != null) {
                     client.disconnect();
                 }
                 return false;
-            }finally {
+            } finally {
                 if (client != null) {
                     client.disconnect();
                 }
             }
-            if(!status.equals("success")){
+            if (!status.equals("success")) {
                 return false;
             }
             return true;
         }
+
         @Override
-        protected void onPostExecute(Boolean bool){
-            if(bool){
-                Intent intent = new Intent(MainActivity.this,LoginActivity.class);
+        protected void onPostExecute(Boolean bool) {
+            if (bool) {
+                Intent intent = new Intent(MainActivity.this, LoginActivity.class);
                 startActivity(intent);
                 finish();
-
-                //Toast.makeText(getApplicationContext(), "Test 1", Toast.LENGTH_SHORT).show();
-            }else{
+            } else {
                 Toast.makeText(getApplicationContext(), "Logout Unsuccessful", Toast.LENGTH_SHORT).show();
                 toggleLoading(false);
             }
         }
     }
 
+    private class HugLater extends AsyncTask<String, Void, Boolean> {
+        @Override
+        protected Boolean doInBackground(String... str) {
+            String token = str[0];
+            String status = "";
+            String urlEndPoint = Constants.WEB_URL + "/api/v1/hugs/hug_later";
+
+            //Run the api call
+            HttpURLConnection client = null;
+            try {
+                URL url = new URL(urlEndPoint);
+                client = (HttpURLConnection) url.openConnection();
+                client.setRequestMethod("GET");
+                client.setConnectTimeout(10000);
+                client.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                client.setRequestProperty("Authorization", " Token " + token);
+                client.connect();
+                int t = client.getResponseCode();
+                if (t != 200) {
+                    return false;
+                }
+                BufferedReader br = new BufferedReader(new InputStreamReader(client.getInputStream()));
+                String text = br.readLine();
+                JSONObject response = new JSONObject(text);
+
+                status = response.getString("status");
+            } catch (Exception e) {
+                e.printStackTrace();
+                if (client != null) {
+                    client.disconnect();
+                }
+                return false;
+            } finally {
+                if (client != null) {
+                    client.disconnect();
+                }
+            }
+            if (!status.equals("success")) {
+                return false;
+            }
+            return true;
+        }
+
+        @Override
+        protected void onPostExecute(Boolean bool) {
+            if (bool) {
+                makeToast("Maybe Huggie Later");
+                removeMarker();
+                toggleButtons(false);
+
+            } else {
+                makeToast("Action Unsuccessful");
+                toggleButtons(true);
+            }
+        }
+    }
+    private class Hug extends AsyncTask<String, Void, Integer> {
+        @Override
+        protected Integer doInBackground(String... str) {
+            String token = str[0];
+            String status = "";
+            String urlEndPoint = Constants.WEB_URL + "/api/v1/hugs/hugging";
+
+            //Run the api call
+            HttpURLConnection client = null;
+            try {
+                URL url = new URL(urlEndPoint);
+                client = (HttpURLConnection) url.openConnection();
+                client.setRequestMethod("GET");
+                client.setConnectTimeout(10000);
+                client.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+                client.setRequestProperty("Authorization", " Token " + token);
+                client.connect();
+                int t = client.getResponseCode();
+                if (t != 200) {
+                    return 0;
+                }
+                BufferedReader br = new BufferedReader(new InputStreamReader(client.getInputStream()));
+                String text = br.readLine();
+                JSONObject response = new JSONObject(text);
+
+                status = response.getString("status");
+            } catch (Exception e) {
+                e.printStackTrace();
+                if (client != null) {
+                    client.disconnect();
+                }
+                return 0;
+            } finally {
+                if (client != null) {
+                    client.disconnect();
+                }
+            }
+
+            if (status.equals("success")) {
+                return 1;
+            } else if (status.equals("wait")) {
+                return 2;
+            }else {
+                return 0;
+            }
+
+        }
+
+        @Override
+        protected void onPostExecute(Integer i) {
+            if (i == 2) {
+                makeToast("Waiting For Huggie");
+            } else if(i == 1) {
+                makeToast("Huggie!");
+                removeMarkerCenter();
+            }else {
+                    Toast.makeText(getApplicationContext(), "Action Unsuccessful", Toast.LENGTH_SHORT).show();
+                    toggleLoading(false);
+            }
+        }
+
+    }
 }
