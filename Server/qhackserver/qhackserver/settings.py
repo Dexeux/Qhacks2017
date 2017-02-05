@@ -25,7 +25,7 @@ SECRET_KEY = '(+nlbl4^sozou^7%@oi4c5pm35@n)8-t405jx&i17=s2+fi*80'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [u'qhackserver-dev.us-west-2.elasticbeanstalk.com']
+ALLOWED_HOSTS = [u'qhackserver-dev.us-west-2.elasticbeanstalk.com', u'35.167.194.68', u'localhost']
 
 
 # Application definition
