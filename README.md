@@ -1,2 +1,2 @@
-# Qhacks2017
+# Huggies!
 Project for qhacks
